@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+!.env.prod.example
+*.pem
+*.key
+
+# Node
+node_modules/
+apps/dashboard/dist/
+apps/dashboard/coverage/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Local artifacts
+*.log
+reports/

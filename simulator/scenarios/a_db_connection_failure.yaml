@@ -1,0 +1,82 @@
+key: a_db_connection_failure
+title: "Scenario A: Database connection failure"
+description: >
+  The nightly load of the orders warehouse fails after three attempts with
+  connection timeouts to the warehouse database. The outage was transient: the
+  simulated database is reachable again by the time the incident is handled.
+  Expected flow: the investigator identifies database connectivity and proposes
+  a read-only connectivity check; after it succeeds, a re-investigation
+  proposes a single bounded retry, which resolves the incident.
+seed: 101
+
+topology:
+  pipelines:
+    - key: a_orders_etl
+      name: Orders ETL (A)
+      owner: data-platform
+      tasks:
+        - {key: extract_orders, name: Extract orders, resource: a-source-api, produces: [a.raw_orders]}
+        - {key: load_warehouse, name: Load warehouse, resource: a-warehouse-db, produces: [a.dw_orders]}
+        - {key: publish_report, name: Publish daily report, produces: [a.orders_report]}
+  dependencies:
+    - [a_orders_etl.extract_orders, a_orders_etl.load_warehouse]
+    - [a_orders_etl.load_warehouse, a_orders_etl.publish_report]
+
+resources:
+  - {key: a-warehouse-db, kind: database, healthy: true, latency_ms: 12}
+  - {key: a-source-api, kind: http_api, healthy: true}
+
+reset_datasets: [a.raw_orders, a.dw_orders, a.orders_report]
+
+history:
+  - task: a_orders_etl.extract_orders
+    runs: 10
+    duration_seconds: [100, 140]
+    current:
+      - {run_id: run-2026-10-18, status: SUCCEEDED, started_offset_minutes: -20, duration_seconds: 118}
+  - task: a_orders_etl.load_warehouse
+    runs: 10
+    duration_seconds: [280, 330]
+    current:
+      - {run_id: run-2026-10-18, attempt: 1, status: FAILED, started_offset_minutes: -17, duration_seconds: 30, error_type: OperationalError, error_message: "connection to server at a-warehouse-db:5432 timed out"}
+      - {run_id: run-2026-10-18, attempt: 2, status: FAILED, started_offset_minutes: -12, duration_seconds: 30, error_type: OperationalError, error_message: "connection to server at a-warehouse-db:5432 timed out"}
+
+logs:
+  - task: a_orders_etl.load_warehouse
+    run_id: run-2026-10-18
+    level: ERROR
+    offset_minutes: -16
+    message: "psycopg.OperationalError: connection to server at \"a-warehouse-db\" (10.0.4.21), port 5432 failed: timeout expired"
+  - task: a_orders_etl.load_warehouse
+    run_id: run-2026-10-18
+    level: WARNING
+    offset_minutes: -12
+    message: "Retrying load_warehouse (attempt 2/3) after connection timeout"
+  - task: a_orders_etl.load_warehouse
+    level: INFO
+    offset_minutes: -6
+    message: "Loaded 0 rows into dw.orders before failure"
+
+events:
+  - event_id: a-load-failed
+    task: a_orders_etl.load_warehouse
+    event_type: TASK_FAILED
+    severity: HIGH
+    offset_minutes: -1
+    metadata: {dag_id: a_orders_etl, retries_exhausted: true}
+    log_excerpt: |
+      [attempt 3/3] psycopg.OperationalError: connection to server at "a-warehouse-db" (10.0.4.21), port 5432 failed: timeout expired
+      Task failed after exhausting retries
+    execution: {run_id: run-2026-10-18, attempt: 3, started_offset_minutes: -7, duration_seconds: 30, error_type: OperationalError}
+
+expected:
+  incidents: 1
+  incident_category: TASK_FAILURE
+  root_cause_category: DATABASE_CONNECTIVITY
+  evidence_must_match: ["timeout expired"]
+  proposed_action: CHECK_DATABASE_CONNECTIVITY
+  follow_up_action: RETRY_TASK
+  min_confidence: 0.6
+  impacted_tasks: [a_orders_etl.publish_report]
+  impacted_datasets: [a.dw_orders, a.orders_report]
+  final_status: RESOLVED

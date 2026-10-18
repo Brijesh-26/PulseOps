@@ -1,0 +1,88 @@
+# Single-VM deployment: Caddy (TLS) -> dashboard (nginx) + API; worker and relay
+# consume real AWS SQS; Postgres runs on the VM with a persistent volume.
+# Credentials for SQS come from the EC2 instance role (no static AWS keys).
+name: pulseops
+
+x-app-env: &app-env
+  PULSEOPS_ENVIRONMENT: prod
+  PULSEOPS_LOG_JSON: "true"
+  PULSEOPS_DATABASE_URL: postgresql+psycopg://pulseops_app:${PULSEOPS_APP_DB_PASSWORD:?}@postgres:5432/pulseops
+  PULSEOPS_MIGRATION_DATABASE_URL: postgresql+psycopg://pulseops:${POSTGRES_PASSWORD:?}@postgres:5432/pulseops
+  PULSEOPS_QUEUE_BACKEND: sqs
+  PULSEOPS_AWS_REGION: ${PULSEOPS_AWS_REGION:-me-central-1}
+  AWS_REGION: ${PULSEOPS_AWS_REGION:-me-central-1}
+  PULSEOPS_SQS_QUEUE_NAME: pulseops-work
+  PULSEOPS_SQS_DLQ_NAME: pulseops-work-dlq
+  PULSEOPS_SESSION_SECRET: ${PULSEOPS_SESSION_SECRET:?}
+  PULSEOPS_CORS_ORIGINS: '["https://${PULSEOPS_DOMAIN:?}"]'
+  PULSEOPS_INVESTIGATOR_PROVIDER: ${PULSEOPS_INVESTIGATOR_PROVIDER:-mock}
+  PULSEOPS_ANTHROPIC_API_KEY: ${PULSEOPS_ANTHROPIC_API_KEY:-}
+  PULSEOPS_ANTHROPIC_MODEL: ${PULSEOPS_ANTHROPIC_MODEL:-claude-opus-5-5}
+  PULSEOPS_DEMO_MODE: "false"
+  # Trust X-Forwarded-For from Caddy (only reachable on the private compose network).
+  FORWARDED_ALLOW_IPS: "*"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pulseops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: pulseops
+      PULSEOPS_APP_DB_PASSWORD: ${PULSEOPS_APP_DB_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-init-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulseops -d pulseops"]
+      interval: 5s
+      retries: 20
+
+  migrate:
+    build: { context: ../.., dockerfile: apps/api/Dockerfile }
+    environment: *app-env
+    command: ["python", "-m", "pulseops.cli", "migrate"]
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: "no"
+
+  api:
+    build: { context: ../.., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    environment: *app-env
+    depends_on: { migrate: { condition: service_completed_successfully } }
+
+  relay:
+    build: { context: ../.., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    environment: *app-env
+    command: ["python", "-m", "pulseops.workers.relay"]
+    healthcheck: { disable: true }
+    depends_on: { migrate: { condition: service_completed_successfully } }
+
+  worker:
+    build: { context: ../.., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    environment: *app-env
+    command: ["python", "-m", "pulseops.workers.worker"]
+    healthcheck: { disable: true }
+    depends_on: { migrate: { condition: service_completed_successfully } }
+
+  dashboard:
+    build: { context: ../../apps/dashboard, target: prod, args: { VITE_API_URL: "" } }
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    environment:
+      PULSEOPS_DOMAIN: ${PULSEOPS_DOMAIN:?}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [api, dashboard]
+
+volumes:
+  pgdata:
+  caddy_data:

@@ -1,0 +1,93 @@
+# Local development stack. Everything runs offline; no paid services are used.
+name: pulseops
+
+x-app-env: &app-env
+  PULSEOPS_ENVIRONMENT: local
+  PULSEOPS_LOG_JSON: "true"
+  PULSEOPS_DATABASE_URL: postgresql+psycopg://pulseops_app:${PULSEOPS_APP_DB_PASSWORD:-pulseops_app}@postgres:5432/pulseops
+  PULSEOPS_MIGRATION_DATABASE_URL: postgresql+psycopg://pulseops:${POSTGRES_PASSWORD:-pulseops}@postgres:5432/pulseops
+  PULSEOPS_QUEUE_BACKEND: sqs
+  PULSEOPS_SQS_ENDPOINT_URL: http://elasticmq:9324
+  PULSEOPS_AWS_REGION: me-central-1
+  AWS_ACCESS_KEY_ID: local
+  AWS_SECRET_ACCESS_KEY: local
+  PULSEOPS_SESSION_SECRET: ${PULSEOPS_SESSION_SECRET:-}
+  PULSEOPS_CORS_ORIGINS: '["http://localhost:5173"]'
+  PULSEOPS_INVESTIGATOR_PROVIDER: ${PULSEOPS_INVESTIGATOR_PROVIDER:-mock}
+  PULSEOPS_ANTHROPIC_API_KEY: ${PULSEOPS_ANTHROPIC_API_KEY:-}
+  PULSEOPS_ANTHROPIC_MODEL: ${PULSEOPS_ANTHROPIC_MODEL:-claude-opus-5-5}
+  PULSEOPS_DEMO_MODE: ${PULSEOPS_DEMO_MODE:-true}
+  # Local-only demo API keys (seeded by `bootstrap` when demo mode is on). Never reuse elsewhere.
+  PULSEOPS_DEMO_KEY_INGEST: ${PULSEOPS_DEMO_KEY_INGEST:-po_demo_ingest_local_only_0001}
+  PULSEOPS_DEMO_KEY_VIEWER: ${PULSEOPS_DEMO_KEY_VIEWER:-po_demo_viewer_local_only_0001}
+  PULSEOPS_DEMO_KEY_OPERATOR: ${PULSEOPS_DEMO_KEY_OPERATOR:-po_demo_operator_local_only_01}
+  PULSEOPS_DEMO_KEY_APPROVER: ${PULSEOPS_DEMO_KEY_APPROVER:-po_demo_approver_local_only_01}
+  PULSEOPS_DEMO_KEY_APPROVER_2: ${PULSEOPS_DEMO_KEY_APPROVER_2:-po_demo_approver2_local_only_1}
+  PULSEOPS_DEMO_KEY_ADMIN: ${PULSEOPS_DEMO_KEY_ADMIN:-po_demo_admin_local_only_00001}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: pulseops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pulseops}
+      POSTGRES_DB: pulseops
+      PULSEOPS_APP_DB_PASSWORD: ${PULSEOPS_APP_DB_PASSWORD:-pulseops_app}
+    ports: ["5433:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-init-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulseops -d pulseops"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  elasticmq:
+    image: softwaremill/elasticmq-native:1.6.11
+    ports: ["9324:9324"]
+
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment: *app-env
+    command: ["python", "-m", "pulseops.cli", "bootstrap"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      elasticmq: { condition: service_started }
+    restart: "no"
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment: *app-env
+    ports: ["8000:8000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  relay:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment: *app-env
+    command: ["python", "-m", "pulseops.workers.relay"]
+    healthcheck: { disable: true }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  worker:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment: *app-env
+    command: ["python", "-m", "pulseops.workers.worker"]
+    healthcheck: { disable: true }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  dashboard:
+    build: { context: apps/dashboard, target: dev }
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports: ["5173:5173"]
+    volumes:
+      - ./apps/dashboard/src:/app/src
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

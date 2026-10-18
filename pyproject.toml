@@ -1,0 +1,77 @@
+[project]
+name = "pulseops"
+version = "0.1.0"
+description = "AI-assisted data pipeline incident investigation with human-approved, simulated recovery."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "fastapi>=0.143,<0.200",
+    "uvicorn[standard]>=0.54,<1",
+    "pydantic>=2.14,<3",
+    "pydantic-settings>=2.16,<3",
+    "sqlalchemy>=2.1.5,<2.2",
+    "alembic>=1.20,<2",
+    "psycopg[binary]>=3.3,<4",
+    "boto3>=1.43,<2",
+    "structlog>=26.1,<27",
+    "anthropic>=1.15,<2",
+    "prometheus-client>=0.26,<1",
+    "pyyaml>=6.0",
+    "httpx>=0.27",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1,<10",
+    "pytest-cov>=7.1,<8",
+    "ruff>=0.17.1,<0.18",
+    "mypy>=2.4,<3",
+    "types-pyyaml>=6.0",
+    "boto3-stubs[sqs]>=1.43,<2",
+    "pip-audit>=2.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pulseops", "simulator"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["apps/dashboard"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "N", "PL", "T20"]
+# Complexity limits are noisy for linear orchestration code; reviewed manually instead.
+ignore = ["PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917", "PLR2004", "S101"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Body", "fastapi.Header", "fastapi.Path"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PLR", "T20"]
+"migrations/**" = ["E501", "PLR0915", "S608"]
+"simulator/cli.py" = ["T20"]
+"simulator/report.py" = ["T20"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["pulseops", "simulator"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["prometheus_client.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: requires PostgreSQL (PULSEOPS_TEST_DATABASE_URL)",
+    "sqs: requires an SQS-compatible endpoint (PULSEOPS_TEST_SQS_ENDPOINT)",
+]

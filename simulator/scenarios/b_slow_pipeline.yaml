@@ -1,0 +1,65 @@
+key: b_slow_pipeline
+title: "Scenario B: Slow pipeline"
+description: >
+  The attribution model build normally takes about 10 minutes but the latest
+  run took 40. The logs contain only routine progress messages. Expected: the
+  investigator reports the abnormal runtime as an observed fact, does not
+  invent a cause from latency alone, lists missing information and next
+  diagnostics, and proposes no action.
+seed: 202
+
+topology:
+  pipelines:
+    - key: b_marketing
+      name: Marketing attribution (B)
+      tasks:
+        - {key: prepare_touchpoints, produces: [b.touchpoints]}
+        - {key: build_attribution, resource: b-warehouse, produces: [b.attribution_model]}
+  dependencies:
+    - [b_marketing.prepare_touchpoints, b_marketing.build_attribution]
+
+resources:
+  - {key: b-warehouse, kind: database, healthy: true}
+
+history:
+  - task: b_marketing.prepare_touchpoints
+    runs: 14
+    duration_seconds: [50, 70]
+    current:
+      - {run_id: run-2026-10-18, status: SUCCEEDED, started_offset_minutes: -45, duration_seconds: 61}
+  - task: b_marketing.build_attribution
+    runs: 14
+    duration_seconds: [560, 640]
+
+logs:
+  - task: b_marketing.build_attribution
+    run_id: run-2026-10-18
+    level: INFO
+    offset_minutes: -40
+    message: "Stage 1/4: loading touchpoints"
+  - task: b_marketing.build_attribution
+    run_id: run-2026-10-18
+    level: INFO
+    offset_minutes: -12
+    message: "Stage 3/4: fitting attribution model"
+
+events:
+  - event_id: b-build-slow
+    task: b_marketing.build_attribution
+    event_type: LATENCY_ANOMALY
+    severity: MEDIUM
+    offset_minutes: -1
+    metadata: {detector: runtime_sla, sla_seconds: 1200}
+    execution: {run_id: run-2026-10-18, attempt: 1, started_offset_minutes: -42, duration_seconds: 2410}
+
+expected:
+  incidents: 1
+  incident_category: LATENCY_ANOMALY
+  root_cause_category: UNKNOWN
+  evidence_kinds: [BASELINE]
+  proposed_action: null
+  max_confidence: 0.3
+  requires_missing_information: true
+  impacted_tasks: []
+  impacted_datasets: [b.attribution_model]
+  final_status: OPEN

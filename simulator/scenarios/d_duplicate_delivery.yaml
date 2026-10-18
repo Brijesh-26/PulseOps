@@ -1,0 +1,45 @@
+key: d_duplicate_delivery
+title: "Scenario D: Duplicate event delivery"
+description: >
+  A fixture sync task fails on a checksum mismatch and the orchestrator's
+  at-least-once notifier delivers the same failure event three times.
+  Expected: one stored event, one incident, one investigation, and, after
+  approval, exactly one execution even if the approval message is redelivered.
+seed: 404
+
+topology:
+  pipelines:
+    - key: d_fixtures
+      name: Test fixtures (D)
+      tasks:
+        - {key: sync_test_fixtures, produces: [d.fixture_orders]}
+
+fixtures:
+  - {key: test_orders_2026_10, status: CORRUPT, checksum: "9f2c0000badbad", expected_checksum: "9f2c41e07ab3d1"}
+
+history:
+  - task: d_fixtures.sync_test_fixtures
+    runs: 5
+    duration_seconds: [20, 30]
+
+events:
+  - event_id: d-fixture-sync-failed
+    task: d_fixtures.sync_test_fixtures
+    event_type: TASK_FAILED
+    severity: LOW
+    offset_minutes: -2
+    deliveries: 3
+    log_excerpt: "ChecksumMismatchError: checksum mismatch for fixture batch test_orders_2026_10 (expected 9f2c41e07ab3d1, got 9f2c0000badbad)"
+    execution: {run_id: run-2026-10-18, attempt: 1, started_offset_minutes: -3, duration_seconds: 22, error_type: ChecksumMismatchError}
+
+expected:
+  incidents: 1
+  stored_events: 1
+  incident_category: TASK_FAILURE
+  root_cause_category: TEST_FIXTURE_CORRUPTION
+  evidence_must_match: ["checksum mismatch"]
+  proposed_action: REPROCESS_TEST_FIXTURE
+  min_confidence: 0.6
+  impacted_tasks: []
+  impacted_datasets: [d.fixture_orders]
+  final_status: RESOLVED

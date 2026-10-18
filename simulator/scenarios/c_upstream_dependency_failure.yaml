@@ -1,0 +1,92 @@
+key: c_upstream_dependency_failure
+title: "Scenario C: Upstream dependency failure"
+description: >
+  The raw orders extract fails because the source API returns HTTP 503.
+  Three downstream pipelines depend on it; two report DEPENDENCY_FAILED.
+  Expected: one incident grouping the upstream failure and the downstream
+  reports, a dependency path to every affected task, and a proposal to mark the
+  affected datasets stale.
+seed: 303
+
+topology:
+  pipelines:
+    - key: c_raw_ingest
+      name: Raw ingest (C)
+      tasks:
+        - {key: extract_orders, resource: c-orders-api, produces: [c.raw_orders]}
+    - key: c_orders_etl
+      name: Orders ETL (C)
+      tasks:
+        - {key: transform_orders, produces: [c.orders_clean]}
+        - {key: load_orders, resource: c-warehouse-db, produces: [c.dw_orders]}
+    - key: c_finance
+      name: Finance reporting (C)
+      tasks:
+        - {key: daily_revenue, produces: [c.daily_revenue]}
+    - key: c_ml
+      name: ML features (C)
+      tasks:
+        - {key: order_features, produces: [c.order_features]}
+  dependencies:
+    - [c_raw_ingest.extract_orders, c_orders_etl.transform_orders]
+    - [c_orders_etl.transform_orders, c_orders_etl.load_orders]
+    - [c_orders_etl.load_orders, c_finance.daily_revenue]
+    - [c_raw_ingest.extract_orders, c_ml.order_features]
+
+resources:
+  - {key: c-orders-api, kind: http_api, healthy: false}
+  - {key: c-warehouse-db, kind: database, healthy: true}
+
+reset_datasets: [c.raw_orders, c.orders_clean, c.dw_orders, c.daily_revenue, c.order_features]
+
+history:
+  - task: c_raw_ingest.extract_orders
+    runs: 7
+    duration_seconds: [40, 60]
+
+logs:
+  - task: c_raw_ingest.extract_orders
+    run_id: run-2026-10-18
+    level: ERROR
+    offset_minutes: -9
+    message: "HTTPError: 503 Service Unavailable from https://orders-api.internal/v2/orders (retry 5/5)"
+
+events:
+  - event_id: c-extract-failed
+    task: c_raw_ingest.extract_orders
+    event_type: TASK_FAILED
+    severity: HIGH
+    offset_minutes: -8
+    log_excerpt: "HTTPError: 503 Service Unavailable from orders API after 5 retries"
+    execution: {run_id: run-2026-10-18, attempt: 1, started_offset_minutes: -10, duration_seconds: 95, error_type: HTTPError}
+  - event_id: c-transform-upstream
+    task: c_orders_etl.transform_orders
+    event_type: DEPENDENCY_FAILED
+    severity: MEDIUM
+    offset_minutes: -6
+    metadata: {upstream_task: c_raw_ingest.extract_orders}
+    log_excerpt: "Skipping transform_orders: upstream_failed (c_raw_ingest.extract_orders)"
+  - event_id: c-features-upstream
+    task: c_ml.order_features
+    event_type: DEPENDENCY_FAILED
+    severity: MEDIUM
+    offset_minutes: -5
+    metadata: {upstream_task: c_raw_ingest.extract_orders}
+    log_excerpt: "Skipping order_features: upstream_failed (c_raw_ingest.extract_orders)"
+
+expected:
+  incidents: 1
+  incident_category: DEPENDENCY_FAILURE
+  root_cause_category: UPSTREAM_DEPENDENCY_FAILURE
+  evidence_must_match: ["upstream_failed"]
+  proposed_action: MARK_DATASET_STALE
+  min_confidence: 0.6
+  impacted_tasks:
+    - c_ml.order_features
+    - c_orders_etl.transform_orders
+    - c_orders_etl.load_orders
+    - c_finance.daily_revenue
+  impacted_paths:
+    c_finance.daily_revenue: [c_raw_ingest.extract_orders, c_orders_etl.transform_orders, c_orders_etl.load_orders, c_finance.daily_revenue]
+  impacted_datasets: [c.daily_revenue, c.dw_orders, c.order_features, c.orders_clean, c.raw_orders]
+  final_status: OPEN

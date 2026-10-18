@@ -1,0 +1,27 @@
+{$PULSEOPS_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	# Metrics are for the private network / SSH tunnel only.
+	handle /metrics {
+		respond 404
+	}
+
+	@api path /api/* /health /ready /docs /openapi.json
+	handle @api {
+		request_body {
+			max_size 128KB
+		}
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy dashboard:80
+	}
+}

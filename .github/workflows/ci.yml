@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pulseops
+          POSTGRES_PASSWORD: pulseops
+          POSTGRES_DB: pulseops
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pulseops" --health-interval 5s --health-timeout 3s --health-retries 20
+      elasticmq:
+        image: softwaremill/elasticmq-native:1.6.11
+        ports: ["9324:9324"]
+    env:
+      PULSEOPS_TEST_DATABASE_URL: postgresql+psycopg://pulseops:pulseops@localhost:5432/pulseops_test
+      PULSEOPS_TEST_SQS_ENDPOINT: http://localhost:9324
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.10.12"
+      - run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Type check
+        run: uv run mypy
+      - name: Tests (unit, integration, evaluation)
+        run: uv run pytest -q --cov=pulseops --cov=simulator --cov-report=term
+      - name: Evaluation report (mock provider)
+        run: uv run python -m simulator evaluate --admin-database-url postgresql+psycopg://pulseops:pulseops@localhost:5432/pulseops_eval --out reports
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-report
+          path: reports/
+      - name: Dependency audit
+        run: |
+          uv export --frozen --no-emit-project --format requirements-txt > /tmp/req.txt
+          uv run pip-audit --strict --disable-pip -r /tmp/req.txt
+
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --audit-level=high
+
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f apps/api/Dockerfile -t pulseops-api:ci .
+      - run: docker build --target prod -t pulseops-dashboard:ci apps/dashboard
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks (full history)
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.28.0 git /repo --no-banner -v
