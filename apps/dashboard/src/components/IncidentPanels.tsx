@@ -170,7 +170,7 @@ export function ProposalPanel({ proposal, incidentId, onFocus }: { proposal: Pro
         </div>
       )}
       {pending && own && <p className="muted small">You proposed this action; another approver must decide.</p>}
-      {pending && !can("proposals:decide") && <p className="muted small">Waiting for an approver.</p>}
+      {pending && !own && !can("proposals:decide") && <p className="muted small">Waiting for an approver.</p>}
       {decide.isError && <ErrorState error={decide.error} />}
       {decide.isSuccess && <div className="notice ok" role="status">Decision recorded.</div>}
 
@@ -375,6 +375,125 @@ export function HistoryPanel({ runs, proposals }: { runs: Investigation[] | unde
           </tbody>
         </table>
       )}
+    </Card>
+  );
+}
+
+const ACTIONS: { type: string; label: string; param: "task" | "resource_key" | "datasets" | "fixture_key" }[] = [
+  { type: "RETRY_TASK", label: "Retry the failed task once", param: "task" },
+  { type: "CHECK_DATABASE_CONNECTIVITY", label: "Check database connectivity (read-only)", param: "resource_key" },
+  { type: "REFRESH_DEPENDENCY_STATUS", label: "Refresh upstream dependency status", param: "task" },
+  { type: "MARK_DATASET_STALE", label: "Mark downstream datasets stale", param: "datasets" },
+  { type: "REPROCESS_TEST_FIXTURE", label: "Reprocess a test fixture", param: "fixture_key" },
+];
+
+export function ProposeFixPanel({
+  incidentId,
+  task,
+  evidence,
+  impact,
+}: {
+  incidentId: string;
+  task: string | null;
+  evidence: Evidence[] | undefined;
+  impact: Impact | undefined;
+}) {
+  const qc = useQueryClient();
+  const [action, setAction] = useState(ACTIONS[0]!.type);
+  const [value, setValue] = useState(task ?? "");
+  const [datasets, setDatasets] = useState<string[]>([]);
+  const [codes, setCodes] = useState<string[]>([]);
+  const [rationale, setRationale] = useState("");
+  const spec = ACTIONS.find((a) => a.type === action)!;
+
+  const submit = useMutation({
+    mutationFn: () =>
+      post<Proposal>(`/api/v1/incidents/${incidentId}/proposals`, {
+        action_type: action,
+        parameters: spec.param === "datasets" ? { datasets } : { [spec.param]: value.trim() },
+        rationale,
+        evidence_codes: codes,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["incident", incidentId] }),
+  });
+
+  function pick(next: string) {
+    setAction(next);
+    const p = ACTIONS.find((a) => a.type === next)!.param;
+    setValue(p === "task" ? (task ?? "") : "");
+  }
+
+  const toggle = (list: string[], item: string) =>
+    list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
+
+  const ready =
+    rationale.trim().length >= 5 &&
+    codes.length > 0 &&
+    (spec.param === "datasets" ? datasets.length > 0 : value.trim().length > 0);
+
+  return (
+    <Card title="Propose a fix">
+      <p className="small muted">
+        Your proposal must be approved by someone else. The server checks that the action is allowed and only
+        touches this incident's own tasks, resources and datasets.
+      </p>
+      <div style={{ display: "grid", gap: 8 }}>
+        <label className="small muted" htmlFor="pf-action">Action</label>
+        <select id="pf-action" value={action} onChange={(e) => pick(e.target.value)}>
+          {ACTIONS.map((a) => (
+            <option key={a.type} value={a.type}>{a.label}</option>
+          ))}
+        </select>
+
+        {spec.param === "datasets" ? (
+          <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
+            <legend className="small muted">Datasets</legend>
+            {(impact?.datasets ?? []).length === 0 && <p className="small muted">No datasets in this incident's impact.</p>}
+            {(impact?.datasets ?? []).map((d) => (
+              <label key={d.key} className="row small">
+                <input type="checkbox" checked={datasets.includes(d.key)} onChange={() => setDatasets(toggle(datasets, d.key))} />
+                <span className="mono">{d.key}</span>
+              </label>
+            ))}
+          </fieldset>
+        ) : (
+          <>
+            <label className="small muted" htmlFor="pf-param">
+              {spec.param === "task" ? "Task (pipeline.task)" : spec.param === "resource_key" ? "Resource" : "Fixture key (test_…)"}
+            </label>
+            <input id="pf-param" className="mono" value={value} onChange={(e) => setValue(e.target.value)} />
+          </>
+        )}
+
+        <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
+          <legend className="small muted">Supporting evidence (pick at least one)</legend>
+          <span className="chips">
+            {(evidence ?? []).map((e) => (
+              <button
+                key={e.code}
+                type="button"
+                className="chip"
+                aria-pressed={codes.includes(e.code)}
+                title={e.title}
+                style={codes.includes(e.code) ? { background: "var(--accent)", color: "var(--accent-text)" } : undefined}
+                onClick={() => setCodes(toggle(codes, e.code))}
+              >
+                {e.code}
+              </button>
+            ))}
+          </span>
+        </fieldset>
+
+        <label className="small muted" htmlFor="pf-why">Why (rationale)</label>
+        <textarea id="pf-why" value={rationale} onChange={(e) => setRationale(e.target.value)} />
+
+        <div className="row">
+          <button className="btn primary" disabled={!ready || submit.isPending} onClick={() => submit.mutate()}>
+            Submit for approval
+          </button>
+        </div>
+        {submit.isError && <ErrorState error={submit.error} />}
+      </div>
     </Card>
   );
 }

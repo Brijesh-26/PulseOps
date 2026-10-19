@@ -231,6 +231,37 @@ describe("incident detail", () => {
   });
 });
 
+describe("propose a fix", () => {
+  const operator: Session = { ...approver, principal: "olga", roles: ["operator"], permissions: ["incidents:read", "investigations:run", "proposals:create"] };
+
+  it("lets an operator submit a proposal with evidence", async () => {
+    const spy = mockFetch(detailHandler({ status: "OPEN", proposals: [], pending_proposal_id: null }));
+    renderAt("/incidents/inc-1", "/incidents/:id", <IncidentDetailPage />, operator);
+    const user = userEvent.setup();
+    const submit = await screen.findByRole("button", { name: /submit for approval/i });
+    expect(submit).toBeDisabled();
+    await user.click(await screen.findByRole("button", { name: "E2" , pressed: false }));
+    await user.type(screen.getByLabelText(/rationale/i), "Timeouts were transient");
+    await user.click(submit);
+    await waitFor(() => {
+      const call = spy.mock.calls.find(([url, init]) => init?.method === "POST" && String(url).endsWith("/proposals"));
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+        action_type: "RETRY_TASK",
+        parameters: { task: "a_orders_etl.load_warehouse" },
+        rationale: "Timeouts were transient",
+        evidence_codes: ["E2"],
+      });
+    });
+  });
+
+  it("is not offered to approvers", async () => {
+    mockFetch(detailHandler({ status: "OPEN", proposals: [], pending_proposal_id: null }));
+    renderAt("/incidents/inc-1", "/incidents/:id", <IncidentDetailPage />, approver);
+    await screen.findByRole("heading", { name: INCIDENT.title });
+    expect(screen.queryByText("Propose a fix")).toBeNull();
+  });
+});
+
 describe("incident list", () => {
   it("shows an empty state", async () => {
     mockFetch(() => ({ body: { items: [], total: 0, limit: 20, offset: 0 } }));

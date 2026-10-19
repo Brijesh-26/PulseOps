@@ -11,6 +11,7 @@ import {
   ImpactPanel,
   InvestigationPanel,
   ProposalPanel,
+  ProposeFixPanel,
   TimelinePanel,
 } from "../components/IncidentPanels";
 import { Badge, Card, ErrorState, Loading, fmtTime } from "../components/ui";
@@ -96,6 +97,9 @@ export default function IncidentDetailPage() {
         </div>
         <div>
           <ProposalPanel proposal={inc.proposals[0]} incidentId={id} onFocus={focusEvidence} />
+          {can("proposals:create") && inc.status === "OPEN" && (
+            <ProposeFixPanel incidentId={id} task={inc.task} evidence={evidence.data} impact={impact.data} />
+          )}
           <ImpactPanel impact={impact.data} />
           {can("incidents:transition") && manual[inc.status] && (
             <Card title="Manual transition">
