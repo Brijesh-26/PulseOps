@@ -6,7 +6,7 @@ import { useAuth } from "../auth";
 import { Card } from "../components/ui";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, notice } = useAuth();
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,6 +37,11 @@ export default function LoginPage() {
             onChange={(e) => setKey(e.target.value)}
             placeholder="po_…"
           />
+          {notice && !error && (
+            <div className="notice warn" role="status">
+              {notice}
+            </div>
+          )}
           {error && (
             <div className="notice bad" role="alert">
               {error}

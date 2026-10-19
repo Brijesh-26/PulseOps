@@ -29,7 +29,7 @@ export default function App() {
           <span className="muted small">
             {session.principal} · {session.roles.join(", ")}
           </span>
-          <button className="btn" onClick={logout}>
+          <button className="btn" onClick={() => logout()}>
             Sign out
           </button>
         </div>

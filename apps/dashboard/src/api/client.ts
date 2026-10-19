@@ -38,8 +38,8 @@ export function saveSession(s: Session | null): void {
   }
 }
 
-let onUnauthorized: (() => void) | null = null;
-export function setUnauthorizedHandler(fn: () => void): void {
+let onUnauthorized: ((reason: string) => void) | null = null;
+export function setUnauthorizedHandler(fn: (reason: string) => void): void {
   onUnauthorized = fn;
 }
 
@@ -54,7 +54,11 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch {
     throw new ApiError(0, "network_error", "Cannot reach the PulseOps API");
   }
-  if (resp.status === 401 && session && onUnauthorized) onUnauthorized();
+  // Any 401 outside the sign-in call means the session is missing, expired or revoked:
+  // send the user back to the sign-in screen instead of leaving them on an error.
+  if (resp.status === 401 && !path.startsWith("/api/v1/auth/session") && onUnauthorized) {
+    onUnauthorized(session ? "You were signed out. Please sign in again." : "Your session expired. Please sign in again.");
+  }
   if (!resp.ok) {
     let body: ApiErrorBody | null = null;
     try {

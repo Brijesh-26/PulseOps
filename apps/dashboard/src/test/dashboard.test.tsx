@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { saveSession } from "../api/client";
 import type { IncidentDetail, Session } from "../api/types";
 import { AuthProvider } from "../auth";
+import App from "../App";
 import IncidentDetailPage from "../pages/IncidentDetailPage";
 import IncidentsPage from "../pages/IncidentsPage";
 import LoginPage from "../pages/LoginPage";
@@ -276,6 +277,36 @@ describe("incident list", () => {
     const url = String(spy.mock.calls[0]?.[0]);
     expect(url).toContain("status=OPEN");
     expect(url).toContain("severity=HIGH");
+  });
+});
+
+describe("session expiry", () => {
+  function renderApp(session: Session) {
+    saveSession(session);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, refetchInterval: false } } });
+    return render(
+      <QueryClientProvider client={qc}>
+        <AuthProvider initial={session}>
+          <MemoryRouter initialEntries={["/scenarios"]}>
+            <App />
+          </MemoryRouter>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  it("returns to sign-in with a message when the token has expired", async () => {
+    mockFetch(() => ({ body: [] }));
+    renderApp({ ...approver, expires_at: Math.floor(Date.now() / 1000) - 5 });
+    expect(await screen.findByText("Your session expired. Please sign in again.")).toBeInTheDocument();
+    expect(screen.getByLabelText("API key")).toBeInTheDocument();
+  });
+
+  it("returns to sign-in when the server rejects the token", async () => {
+    mockFetch(() => ({ status: 401, body: { error: { code: "unauthenticated", message: "Missing credentials", details: null, correlation_id: "c" } } }));
+    renderApp(approver);
+    expect(await screen.findByText(/Please sign in again/)).toBeInTheDocument();
+    expect(screen.queryByText("Missing credentials")).toBeNull();
   });
 });
 
