@@ -1,5 +1,7 @@
 # PulseOps
 
+[![CI](https://github.com/Brijesh-26/PulseOps/actions/workflows/ci.yml/badge.svg)](https://github.com/Brijesh-26/PulseOps/actions/workflows/ci.yml)
+
 PulseOps investigates data pipeline failures. It reads logs, task history and dependency information, then works out an evidence-backed root cause and maps the downstream impact. It can propose a recovery action. That action runs only in a simulator, and only after a human approves it.
 
 It is a working backend system, not a chatbot wrapper. The pipeline is:
@@ -355,7 +357,7 @@ Coverage at the time of writing was 89% (`pytest --cov=pulseops --cov=simulator`
 - pip-audit, npm audit, and
 - a gitleaks scan of the full history.
 
-The CI workflow has been written but **has not yet run on GitHub**, because the repository has not been pushed. Each step was run locally.
+CI runs on every push to `main`; see the [Actions tab](https://github.com/Brijesh-26/PulseOps/actions/workflows/ci.yml).
 
 ## Deployment
 
