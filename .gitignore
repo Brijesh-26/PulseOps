@@ -33,3 +33,6 @@ apps/dashboard/coverage/
 # Local artifacts
 *.log
 reports/
+
+# Local Claude Code session files
+.claude/
