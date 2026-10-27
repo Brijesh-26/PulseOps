@@ -19,6 +19,7 @@ x-app-env: &app-env
   PULSEOPS_ANTHROPIC_API_KEY: ${PULSEOPS_ANTHROPIC_API_KEY:-}
   PULSEOPS_ANTHROPIC_MODEL: ${PULSEOPS_ANTHROPIC_MODEL:-claude-opus-5-5}
   PULSEOPS_DEMO_MODE: "false"
+  PULSEOPS_GUEST_PRINCIPAL: ${PULSEOPS_GUEST_PRINCIPAL:-}
   # Trust X-Forwarded-For from Caddy (only reachable on the private compose network).
   FORWARDED_ALLOW_IPS: "*"
 

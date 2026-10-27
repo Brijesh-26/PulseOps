@@ -27,6 +27,11 @@ This document separates what is implemented and tested from what would be requir
   - Operators cannot approve, and approvers cannot propose.
   - The proposer can never decide their own proposal (`self_approval_forbidden`).
   - AI proposals are attributed to `system:investigator`, which has no key and no roles.
+- **Guest access** (optional, off by default).
+  - `POST /api/v1/auth/guest` issues a normal session token for the principal named in `PULSEOPS_GUEST_PRINCIPAL`, with no key required.
+  - The endpoint refuses to do so unless that principal is active and has **only** the viewer role, so a misconfiguration can't make write access public (tested).
+  - It is rate-limited like the other auth endpoints, and each guest session is audited.
+  - Deactivating the principal or clearing the setting switches guest access off.
 - **Failed logins** are audited, with the key prefix only.
 - **Brute force.** Authentication endpoints are rate-limited per client IP.
 

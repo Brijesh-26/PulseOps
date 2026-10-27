@@ -14,7 +14,7 @@ It is a working backend system, not a chatbot wrapper. The pipeline is:
 6. **Approval and execution.** An allowlisted action runs in the simulator only after a separate person approves it.
 7. **Audit trail.** Every step is recorded in an append-only, hash-chained audit trail.
 
-**Live demo:** https://pulseops.65-0-42-65.sslip.io (AWS Mumbai). Demo access is available on request.
+**Live demo:** https://pulseops.65-0-42-65.sslip.io (AWS Mumbai). Click **Try the demo** for read-only access. The approval workflow needs operator and approver roles, so I show it live on request.
 
 > Status: a portfolio project. It runs end to end locally and on AWS, and every number in this README comes from real runs. It is **not production-ready**. See [Limitations](#limitations) and [docs/security.md](docs/security.md).
 

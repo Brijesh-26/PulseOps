@@ -19,6 +19,7 @@ x-app-env: &app-env
   PULSEOPS_DEMO_MODE: ${PULSEOPS_DEMO_MODE:-true}
   # Local-only demo API keys (seeded by `bootstrap` when demo mode is on). Never reuse elsewhere.
   PULSEOPS_DEMO_KEY_INGEST: ${PULSEOPS_DEMO_KEY_INGEST:-po_demo_ingest_local_only_0001}
+  PULSEOPS_GUEST_PRINCIPAL: demo-viewer
   PULSEOPS_DEMO_KEY_VIEWER: ${PULSEOPS_DEMO_KEY_VIEWER:-po_demo_viewer_local_only_0001}
   PULSEOPS_DEMO_KEY_OPERATOR: ${PULSEOPS_DEMO_KEY_OPERATOR:-po_demo_operator_local_only_01}
   PULSEOPS_DEMO_KEY_APPROVER: ${PULSEOPS_DEMO_KEY_APPROVER:-po_demo_approver_local_only_01}

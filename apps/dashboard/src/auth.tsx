@@ -1,13 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
-import { loadSession, login as apiLogin, saveSession, setUnauthorizedHandler } from "./api/client";
+import {
+  loadSession,
+  login as apiLogin,
+  loginAsGuest,
+  saveSession,
+  setUnauthorizedHandler,
+} from "./api/client";
 import type { Session } from "./api/types";
 
 interface AuthState {
   session: Session | null;
   notice: string | null;
   login: (apiKey: string) => Promise<void>;
+  loginGuest: () => Promise<void>;
   logout: (notice?: string) => void;
   can: (permission: string) => boolean;
 }
@@ -43,6 +50,10 @@ export function AuthProvider({ children, initial }: { children: ReactNode; initi
       notice,
       login: async (apiKey: string) => {
         setSession(await apiLogin(apiKey));
+        setNotice(null);
+      },
+      loginGuest: async () => {
+        setSession(await loginAsGuest());
         setNotice(null);
       },
       logout,

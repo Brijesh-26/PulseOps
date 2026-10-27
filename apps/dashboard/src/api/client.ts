@@ -54,9 +54,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch {
     throw new ApiError(0, "network_error", "Cannot reach the PulseOps API");
   }
-  // Any 401 outside the sign-in call means the session is missing, expired or revoked:
+  // Any 401 outside the sign-in calls means the session is missing, expired or revoked:
   // send the user back to the sign-in screen instead of leaving them on an error.
-  if (resp.status === 401 && !path.startsWith("/api/v1/auth/session") && onUnauthorized) {
+  if (resp.status === 401 && !path.startsWith("/api/v1/auth/") && onUnauthorized) {
     onUnauthorized(session ? "You were signed out. Please sign in again." : "Your session expired. Please sign in again.");
   }
   if (!resp.ok) {
@@ -84,4 +84,18 @@ export async function login(apiKey: string): Promise<Session> {
   const s = await post<Session>("/api/v1/auth/session", { api_key: apiKey });
   saveSession(s);
   return s;
+}
+
+export async function loginAsGuest(): Promise<Session> {
+  const s = await post<Session>("/api/v1/auth/guest");
+  saveSession(s);
+  return s;
+}
+
+export async function guestEnabled(): Promise<boolean> {
+  try {
+    return (await api<{ guest_enabled: boolean }>("/api/v1/auth/options")).guest_enabled;
+  } catch {
+    return false;
+  }
 }

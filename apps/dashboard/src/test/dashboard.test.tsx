@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import { saveSession } from "../api/client";
+import { loadSession, saveSession } from "../api/client";
 import type { IncidentDetail, Session } from "../api/types";
 import { AuthProvider } from "../auth";
 import App from "../App";
@@ -318,5 +318,23 @@ describe("login", () => {
     await user.type(screen.getByLabelText("API key"), "po_live_wrong_key_value_123456");
     await user.click(screen.getByRole("button", { name: /sign in/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Invalid API key");
+  });
+
+  it("hides the guest button when guest access is off", async () => {
+    const spy = mockFetch(() => ({ body: { guest_enabled: false } }));
+    renderAt("/", "/", <LoginPage />, null);
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: /try the demo/i })).toBeNull();
+  });
+
+  it("signs in as a read-only guest", async () => {
+    const spy = mockFetch((url) =>
+      url.endsWith("/auth/options") ? { body: { guest_enabled: true } } : { body: { ...viewer, principal: "guest-viewer" } },
+    );
+    renderAt("/", "/", <LoginPage />, null);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /try the demo/i }));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith(expect.stringContaining("/api/v1/auth/guest"), expect.anything()));
+    expect(loadSession()?.principal).toBe("guest-viewer");
   });
 });

@@ -22,6 +22,34 @@ def test_session_token_flow(ctx: Ctx) -> None:
     assert "proposals:create" not in me.json()["permissions"]
 
 
+def test_guest_access_disabled_by_default(ctx: Ctx) -> None:
+    assert ctx.client.get("/api/v1/auth/options").json() == {"guest_enabled": False}
+    assert ctx.client.post("/api/v1/auth/guest").status_code == 404
+
+
+def test_guest_session_is_read_only(ctx: Ctx) -> None:
+    ctx.runtime.settings.guest_principal = "test-viewer"
+    assert ctx.client.get("/api/v1/auth/options").json() == {"guest_enabled": True}
+    resp = ctx.client.post("/api/v1/auth/guest")
+    assert resp.status_code == 200
+    assert resp.json()["principal"] == "test-viewer"
+    assert resp.json()["roles"] == ["viewer"]
+    headers = {"Authorization": f"Bearer {resp.json()['token']}"}
+    assert ctx.client.get("/api/v1/incidents", headers=headers).status_code == 200
+    with ctx.session() as s:
+        rec = s.scalars(
+            select(AuditRecord).where(AuditRecord.action == "auth.guest_session_created")
+        ).one()
+        assert rec.actor == "test-viewer"
+
+
+def test_guest_refuses_privileged_principal(ctx: Ctx) -> None:
+    ctx.runtime.settings.guest_principal = "test-admin"
+    resp = ctx.client.post("/api/v1/auth/guest")
+    assert resp.status_code == 403
+    assert resp.json()["error"]["code"] == "guest_misconfigured"
+
+
 def test_tampered_token_rejected(ctx: Ctx) -> None:
     token = ctx.client.post("/api/v1/auth/session", json={"api_key": ctx.keys[Role.VIEWER]}).json()[
         "token"

@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # Auth
     session_secret: SecretStr = SecretStr("")
     session_ttl_seconds: int = 3600
+    # Name of an existing viewer-only principal that anyone may sign in as from the
+    # dashboard ("Try the demo"). Unset disables guest access.
+    guest_principal: str | None = None
 
     # Queue
     queue_backend: Literal["memory", "sqs"] = "sqs"

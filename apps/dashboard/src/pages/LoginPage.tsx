@@ -1,22 +1,30 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
-import { ApiError } from "../api/client";
+import { ApiError, guestEnabled } from "../api/client";
 import { useAuth } from "../auth";
 import { Card } from "../components/ui";
 
 export default function LoginPage() {
-  const { login, notice } = useAuth();
+  const { login, loginGuest, notice } = useAuth();
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [guest, setGuest] = useState(false);
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    let live = true;
+    void guestEnabled().then((on) => live && setGuest(on));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  async function run(signIn: () => Promise<void>) {
     setBusy(true);
     setError(null);
     try {
-      await login(key.trim());
+      await signIn();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Sign-in failed");
     } finally {
@@ -24,9 +32,25 @@ export default function LoginPage() {
     }
   }
 
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    void run(() => login(key.trim()));
+  }
+
   return (
     <div className="login">
       <Card title="Sign in to PulseOps">
+        {guest && (
+          <div className="guest">
+            <button className="btn primary" disabled={busy} type="button" onClick={() => void run(loginGuest)}>
+              Try the demo
+            </button>
+            <p className="muted small">
+              Read-only access: browse incidents, evidence, AI hypotheses, impact and the audit trail.
+            </p>
+            <hr />
+          </div>
+        )}
         <form onSubmit={submit}>
           <label htmlFor="key">API key</label>
           <input
@@ -47,7 +71,7 @@ export default function LoginPage() {
               {error}
             </div>
           )}
-          <button className="btn primary" disabled={busy || key.trim().length < 24} type="submit">
+          <button className={guest ? "btn" : "btn primary"} disabled={busy || key.trim().length < 24} type="submit">
             {busy ? "Signing in…" : "Sign in"}
           </button>
           <p className="muted small">
