@@ -14,7 +14,9 @@ It is a working backend system, not a chatbot wrapper. The pipeline is:
 6. **Approval and execution.** An allowlisted action runs in the simulator only after a separate person approves it.
 7. **Audit trail.** Every step is recorded in an append-only, hash-chained audit trail.
 
-> Status: a portfolio project. It runs end to end locally, and every number in this README comes from real runs. It is **not production-ready**. See [Limitations](#limitations) and [docs/security.md](docs/security.md).
+**Live demo:** https://pulseops.65-0-42-65.sslip.io (AWS Mumbai). Demo access is available on request.
+
+> Status: a portfolio project. It runs end to end locally and on AWS, and every number in this README comes from real runs. It is **not production-ready**. See [Limitations](#limitations) and [docs/security.md](docs/security.md).
 
 ![Incident detail: upstream dependency failure](docs/screenshots/incident-upstream.png)
 
@@ -363,7 +365,18 @@ CI runs on every push to `main`; see the [Actions tab](https://github.com/Brijes
 
 The recommended low-cost target is **a single small VM** running Docker Compose, with Caddy for automatic TLS, real AWS SQS and a DLQ, and Postgres on the VM. Exact steps and cost drivers are in [docs/deployment.md](docs/deployment.md), and the configuration is in [deploy/vm/](deploy/vm).
 
-**No deployment has been performed.** No cloud credentials were available, so there is no public demo URL.
+**Live:** https://pulseops.65-0-42-65.sslip.io, running in `ap-south-1` (Mumbai).
+
+| Layer | What runs |
+|---|---|
+| Compute | One EC2 `t4g.small` (Graviton, Ubuntu 24.04), 30 GB encrypted gp3, Elastic IP |
+| TLS | Caddy with an automatic Let's Encrypt certificate. Only ports 80/443 are open |
+| Queue | Real SQS: `pulseops-work`, with redrive to `pulseops-work-dlq` after 5 receives |
+| Credentials | An IAM instance role with least-privilege SQS access. There are no static AWS keys on the server. IMDSv2 is required |
+| Access | SSM Session Manager. There is no SSH key and no port 22 |
+| Backups | `pg_dump` to a private S3 bucket with 14-day expiry. The server role can only `PutObject` |
+
+The live instance uses the deterministic mock investigator and runs with demo mode off. Scenario data was loaded through the CLI.
 
 ## Limitations
 
@@ -372,7 +385,7 @@ The recommended low-cost target is **a single small VM** running Docker Compose,
 - **Per-process rate limits.** They are not shared across replicas.
 - **Serialised audit writes.** Audit appends take a global advisory lock, which limits audit throughput. That is fine for this workload but would not scale to very high write rates.
 - **Confidence is uncalibrated.** The mock evaluation does not measure LLM quality (see above).
-- **Single database.** Postgres runs on a single VM with no automated backups in the provided config. Use RDS or a backup job for anything real.
+- **Single database.** Postgres runs on a single VM. Backups are `pg_dump` files in S3, so there is no point-in-time recovery. Use RDS for anything real.
 - **No real alerting.** There is no notification channel or paging integration.
 
 ## Future work

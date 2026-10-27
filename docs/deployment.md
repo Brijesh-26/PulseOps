@@ -1,12 +1,12 @@
 # Deployment
 
-**Status: not deployed.** No cloud credentials were available while this was built, so everything below is configuration plus manual steps. Parts of it have been validated locally:
+**Status: deployed** at https://pulseops.65-0-42-65.sslip.io (EC2 `t4g.small`, `ap-south-1`), following the steps below. Verified on the live instance:
 
-- `docker compose -f deploy/vm/compose.prod.yml config` succeeds when the required variables are set.
-- `caddy validate` accepts the Caddyfile.
-- The production dashboard image builds.
+- `/ready` reports the database and SQS as `ok`.
+- Caddy obtained a Let's Encrypt certificate.
+- A `pg_dump` backup uploaded to S3 using only the instance role.
 
-Nothing has been verified on AWS.
+Two differences from the steps below: access is through SSM Session Manager instead of SSH (no key pair, port 22 closed), and IMDSv2 is required with hop limit 2 so containers can reach the instance role.
 
 ## Recommended target: one small VM
 
