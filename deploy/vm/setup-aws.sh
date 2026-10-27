@@ -3,7 +3,7 @@
 # policy to attach to the VM's instance role. Run from a machine with AWS
 # credentials for the target account. Idempotent.
 set -euo pipefail
-REGION="${PULSEOPS_AWS_REGION:-me-central-1}"
+REGION="${PULSEOPS_AWS_REGION:-ap-south-1}"
 MAX_RECEIVE="${PULSEOPS_MAX_RECEIVE_COUNT:-5}"
 
 DLQ_URL=$(aws sqs create-queue --region "$REGION" --queue-name pulseops-work-dlq \

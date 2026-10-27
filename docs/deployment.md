@@ -21,7 +21,7 @@ This is the cheapest credible setup. It uses one VM, real SQS, and no load balan
 
 ### Cost drivers (estimates, not quotes)
 
-Check current prices for your region in the AWS Pricing Calculator. `me-central-1` (UAE) is usually priced above `us-east-1`.
+Check current prices for your region in the AWS Pricing Calculator. `ap-south-1` (Mumbai) is the default region for this deployment.
 
 | Item | Driver | Rough order of magnitude |
 |---|---|---|
@@ -43,7 +43,7 @@ Upgrades that cost more, and why you might want them:
 1. **AWS resources.** From a machine with admin credentials, run:
 
    ```bash
-   PULSEOPS_AWS_REGION=me-central-1 deploy/vm/setup-aws.sh
+   PULSEOPS_AWS_REGION=ap-south-1 deploy/vm/setup-aws.sh
    ```
 
    This creates `pulseops-work` (60 s visibility, 10 s long polling) and `pulseops-work-dlq` (14-day retention) with a redrive policy (`maxReceiveCount=5`), and prints a least-privilege IAM policy.

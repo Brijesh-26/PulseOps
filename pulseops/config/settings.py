@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # Queue
     queue_backend: Literal["memory", "sqs"] = "sqs"
     sqs_endpoint_url: str | None = None
-    aws_region: str = "me-central-1"
+    aws_region: str = "ap-south-1"
     sqs_queue_name: str = "pulseops-work"
     sqs_dlq_name: str = "pulseops-work-dlq"
     sqs_visibility_timeout_seconds: int = 60

@@ -9,8 +9,8 @@ x-app-env: &app-env
   PULSEOPS_DATABASE_URL: postgresql+psycopg://pulseops_app:${PULSEOPS_APP_DB_PASSWORD:?}@postgres:5432/pulseops
   PULSEOPS_MIGRATION_DATABASE_URL: postgresql+psycopg://pulseops:${POSTGRES_PASSWORD:?}@postgres:5432/pulseops
   PULSEOPS_QUEUE_BACKEND: sqs
-  PULSEOPS_AWS_REGION: ${PULSEOPS_AWS_REGION:-me-central-1}
-  AWS_REGION: ${PULSEOPS_AWS_REGION:-me-central-1}
+  PULSEOPS_AWS_REGION: ${PULSEOPS_AWS_REGION:-ap-south-1}
+  AWS_REGION: ${PULSEOPS_AWS_REGION:-ap-south-1}
   PULSEOPS_SQS_QUEUE_NAME: pulseops-work
   PULSEOPS_SQS_DLQ_NAME: pulseops-work-dlq
   PULSEOPS_SESSION_SECRET: ${PULSEOPS_SESSION_SECRET:?}
